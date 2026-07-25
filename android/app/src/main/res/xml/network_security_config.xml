@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">radio-browser.info</domain>
+        <domain includeSubdomains="true">de1.api.radio-browser.info</domain>
+        <domain includeSubdomains="true">nl1.api.radio-browser.info</domain>
+        <domain includeSubdomains="true">fr1.api.radio-browser.info</domain>
+        <!-- Permitir HTTP para streams de radio -->
+        <domain includeSubdomains="true">stream.live.vc.bbcmedia.co.uk</domain>
+        <domain includeSubdomains="true">playerservices.streamtheworld.com</domain>
+        <domain includeSubdomains="true">direct.franceinter.fr</domain>
+        <domain includeSubdomains="true">npr-ice.streamguys1.com</domain>
+        <domain includeSubdomains="true">sa.mp3.icecast.magma.edge-access.net</domain>
+    </domain-config>
+    
+    <!-- Configuración base para permitir cleartext en desarrollo -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>
