@@ -1,10 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:provider/provider.dart';
 import 'providers/radio_provider.dart';
 import 'screens/home_screen.dart';
 import 'theme/app_theme.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Audio en segundo plano con notificación multimedia
+  // (controles en pantalla de bloqueo y centro de notificaciones).
+  try {
+    await JustAudioBackground.init(
+      androidNotificationChannelId: 'worldradio_fm_audio',
+      androidNotificationChannelName: 'Reproducción de radio',
+      androidNotificationOngoing: true,
+    );
+  } catch (e) {
+    debugPrint('No se pudo inicializar el audio en segundo plano: $e');
+  }
+
   runApp(const RadioMundialApp());
 }
 
@@ -16,7 +31,7 @@ class RadioMundialApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (context) => RadioProvider(),
       child: MaterialApp(
-        title: 'Radio Mundial',
+        title: 'WorldRadio FM',
         theme: AppTheme.theme,
         home: const HomeScreen(),
         debugShowCheckedModeBanner: false,

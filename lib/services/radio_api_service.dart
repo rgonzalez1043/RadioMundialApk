@@ -133,10 +133,10 @@ class RadioApiService {
     }
   }
 
-  // Obtener lista de países
+  // Obtener lista de países (ordenados por cantidad de emisoras)
   static Future<List<Country>> getCountries() async {
     try {
-      final url = Uri.parse('$baseUrl/json/countries');
+      final url = Uri.parse('$baseUrl/json/countries?order=stationcount&reverse=true&hidebroken=true');
       final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
@@ -151,15 +151,18 @@ class RadioApiService {
     }
   }
 
-  // Obtener lista de géneros/tags
-  static Future<List<String>> getGenres() async {
+  // Obtener los géneros/tags más populares
+  static Future<List<String>> getGenres({int limit = 14}) async {
     try {
-      final url = Uri.parse('$baseUrl/json/tags');
+      final url = Uri.parse('$baseUrl/json/tags?order=stationcount&reverse=true&limit=$limit&hidebroken=true');
       final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
-        return data.map((item) => item['name'].toString()).toList();
+        return data
+            .map((item) => item['name'].toString().trim())
+            .where((name) => name.length > 1)
+            .toList();
       } else {
         throw Exception('Error al obtener géneros: ${response.statusCode}');
       }

@@ -33,10 +33,12 @@ dependencies:
   cupertino_icons: ^1.0.8
   provider: ^6.1.1
   http: ^1.1.0
-  audioplayers: ^5.2.1
   font_awesome_flutter: ^10.6.0
   cached_network_image: ^3.3.0
   shared_preferences: ^2.2.2
+  just_audio: ^0.10.6
+  just_audio_background: ^0.0.1-beta.17
+  audio_session: ^0.2.4
 
 dev_dependencies:
   flutter_test:
@@ -48,6 +50,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+  flutter_native_splash: ^2.4.7
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -63,6 +66,18 @@ flutter:
   # Logo de la aplicación
   assets:
     - assets/logo.png
+
+# Pantalla de inicio nativa (splash) con el logo de WorldRadio FM.
+# Regenerar con: dart run flutter_native_splash:create
+flutter_native_splash:
+  color: "#0F0F23"
+  image: assets/splash_logo.png
+  android: true
+  ios: true
+  web: false
+  android_12:
+    color: "#0F0F23"
+    image: assets/splash_logo.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -285,6 +285,33 @@ class PlayerWidget extends StatelessWidget {
                     ],
                   ),
                 ),
+
+              // Cuenta regresiva del temporizador de apagado
+              if (radioProvider.sleepRemaining != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const FaIcon(
+                        FontAwesomeIcons.stopwatch,
+                        color: AppTheme.secondaryColor,
+                        size: 10,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        radioProvider.sleepRemaining!.inMinutes >= 1
+                            ? 'Apagado en ${radioProvider.sleepRemaining!.inMinutes} min'
+                            : 'Apagado en menos de 1 min',
+                        style: const TextStyle(
+                          color: AppTheme.secondaryColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
         );

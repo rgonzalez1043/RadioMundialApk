@@ -15,7 +15,7 @@ void main() {
     await tester.pumpWidget(const RadioMundialApp());
 
     // Verify that our app loads with the correct title.
-    expect(find.text('Radio Mundial'), findsOneWidget);
+    expect(find.text('WorldRadio FM'), findsOneWidget);
     
     // Verify that the tabs are present
     expect(find.text('Popular'), findsOneWidget);

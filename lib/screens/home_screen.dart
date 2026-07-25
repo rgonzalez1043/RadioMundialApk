@@ -17,6 +17,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
+  String _countryFilter = '';
 
   @override
   void initState() {
@@ -54,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             const SizedBox(width: 10),
             const Flexible(
               child: Text(
-                'Radio Mundial',
+                'WorldRadio FM',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -73,6 +74,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
         elevation: 0,
         centerTitle: true,
+        actions: [
+          Consumer<RadioProvider>(
+            builder: (context, radioProvider, child) {
+              final timerActive = radioProvider.sleepRemaining != null;
+              return IconButton(
+                onPressed: _showSleepTimerSheet,
+                tooltip: 'Temporizador de apagado',
+                icon: FaIcon(
+                  FontAwesomeIcons.stopwatch,
+                  size: 20,
+                  color: timerActive ? AppTheme.secondaryColor : Colors.white70,
+                ),
+              );
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: AppTheme.secondaryColor,
@@ -106,7 +123,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             builder: (context, radioProvider, child) {
               if (radioProvider.currentStation != null) {
                 return Container(
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     gradient: AppTheme.primaryGradient,
                     boxShadow: [
                       BoxShadow(
@@ -122,7 +139,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               return const SizedBox.shrink();
             },
           ),
-          
+
           // Contenido de las pestañas
           Expanded(
             child: TabBarView(
@@ -130,13 +147,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               children: [
                 // Pestaña Popular
                 _buildPopularTab(),
-                
+
                 // Pestaña Buscar
                 _buildSearchTab(),
-                
+
                 // Pestaña Países
                 _buildCountriesTab(),
-                
+
                 // Pestaña Favoritos
                 _buildFavoritesTab(),
               ],
@@ -147,11 +164,96 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  // Hoja inferior con las opciones del temporizador de apagado
+  void _showSleepTimerSheet() {
+    final radioProvider = context.read<RadioProvider>();
+    const options = [5, 15, 30, 45, 60];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.surfaceColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        final remaining = radioProvider.sleepRemaining;
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Apagado automático',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              if (remaining != null)
+                ListTile(
+                  leading: const FaIcon(
+                    FontAwesomeIcons.ban,
+                    color: AppTheme.accentColor,
+                    size: 18,
+                  ),
+                  title: Text(
+                    'Cancelar temporizador (quedan ${_formatRemaining(remaining)})',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  onTap: () {
+                    radioProvider.cancelSleepTimer();
+                    Navigator.pop(sheetContext);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Temporizador cancelado'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                ),
+              for (final minutes in options)
+                ListTile(
+                  leading: const FaIcon(
+                    FontAwesomeIcons.clock,
+                    color: Colors.white54,
+                    size: 18,
+                  ),
+                  title: Text(
+                    '$minutes minutos',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  onTap: () {
+                    radioProvider.setSleepTimer(Duration(minutes: minutes));
+                    Navigator.pop(sheetContext);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('La radio se apagará en $minutes minutos'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  static String _formatRemaining(Duration remaining) {
+    if (remaining.inMinutes >= 1) return '${remaining.inMinutes} min';
+    return '${remaining.inSeconds} s';
+  }
+
   Widget _buildPopularTab() {
     return Consumer<RadioProvider>(
       builder: (context, radioProvider, child) {
         if (radioProvider.isLoading && radioProvider.stations.isEmpty) {
-          return Center(
+          return const Center(
             child: CircularProgressIndicator(
               color: AppTheme.primaryColor,
             ),
@@ -270,7 +372,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           child: Consumer<RadioProvider>(
             builder: (context, radioProvider, child) {
               if (radioProvider.isLoading) {
-                return Center(
+                return const Center(
                   child: CircularProgressIndicator(
                     color: AppTheme.primaryColor,
                   ),
@@ -286,52 +388,143 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildCountriesTab() {
-    final countries = [
-      {'name': 'Argentina', 'code': 'argentina', 'flag': '🇦🇷'},
-      {'name': 'España', 'code': 'spain', 'flag': '🇪🇸'},
-      {'name': 'México', 'code': 'mexico', 'flag': '🇲🇽'},
-      {'name': 'Colombia', 'code': 'colombia', 'flag': '🇨🇴'},
-      {'name': 'Chile', 'code': 'chile', 'flag': '🇨🇱'},
-      {'name': 'Perú', 'code': 'peru', 'flag': '🇵🇪'},
-      {'name': 'Estados Unidos', 'code': 'united states', 'flag': '🇺🇸'},
-      {'name': 'Reino Unido', 'code': 'united kingdom', 'flag': '🇬🇧'},
-      {'name': 'Francia', 'code': 'france', 'flag': '🇫🇷'},
-      {'name': 'Alemania', 'code': 'germany', 'flag': '🇩🇪'},
-    ];
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: countries.length,
-      itemBuilder: (context, index) {
-        final country = countries[index];
-        return Card(
-          color: AppTheme.cardColor,
-          margin: const EdgeInsets.only(bottom: 8),
-          child: ListTile(
-            leading: Text(
-              country['flag']!,
-              style: const TextStyle(fontSize: 24),
-            ),
-            title: Text(
-              country['name']!,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w500,
+    return Column(
+      children: [
+        // Filtro de países
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: TextField(
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(
+              hintText: 'Filtrar países...',
+              isDense: true,
+              prefixIcon: Padding(
+                padding: EdgeInsets.all(12),
+                child: FaIcon(
+                  FontAwesomeIcons.magnifyingGlass,
+                  color: Colors.white54,
+                  size: 16,
+                ),
               ),
             ),
-            trailing: const FaIcon(
-              FontAwesomeIcons.chevronRight,
-              color: Colors.white54,
-              size: 16,
-            ),
-            onTap: () {
-              context.read<RadioProvider>().getStationsByCountry(country['code']!);
-              _tabController.animateTo(0); // Ir a la pestaña popular para mostrar resultados
+            onChanged: (value) {
+              setState(() => _countryFilter = value.trim().toLowerCase());
             },
           ),
-        );
-      },
+        ),
+        Expanded(
+          child: Consumer<RadioProvider>(
+            builder: (context, radioProvider, child) {
+              if (radioProvider.countriesLoading && radioProvider.countries.isEmpty) {
+                return const Center(
+                  child: CircularProgressIndicator(
+                    color: AppTheme.primaryColor,
+                  ),
+                );
+              }
+
+              if (radioProvider.countries.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const FaIcon(
+                        FontAwesomeIcons.globe,
+                        color: Colors.white54,
+                        size: 48,
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'No se pudieron cargar los países',
+                        style: TextStyle(color: Colors.white70, fontSize: 16),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () => radioProvider.loadCountries(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryColor,
+                        ),
+                        child: const Text('Reintentar'),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              final filtered = _countryFilter.isEmpty
+                  ? radioProvider.countries
+                  : radioProvider.countries
+                      .where((c) => c.name.toLowerCase().contains(_countryFilter))
+                      .toList();
+
+              if (filtered.isEmpty) {
+                return const Center(
+                  child: Text(
+                    'Sin resultados para ese filtro',
+                    style: TextStyle(color: Colors.white54),
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  final country = filtered[index];
+                  return Card(
+                    color: AppTheme.cardColor,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      leading: Text(
+                        _flagEmoji(country.iso31661),
+                        style: const TextStyle(fontSize: 24),
+                      ),
+                      title: Text(
+                        country.name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        '${country.stationcount} emisoras',
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
+                      ),
+                      trailing: const FaIcon(
+                        FontAwesomeIcons.chevronRight,
+                        color: Colors.white54,
+                        size: 16,
+                      ),
+                      onTap: () {
+                        context
+                            .read<RadioProvider>()
+                            .getStationsByCountryCode(country.iso31661);
+                        _tabController.animateTo(0);
+                      },
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
+  }
+
+  // Convierte el código ISO del país (p. ej. "AR") en su bandera emoji
+  static String _flagEmoji(String isoCode) {
+    final code = isoCode.trim().toUpperCase();
+    if (code.length != 2) return '🏳️';
+    final first = code.codeUnitAt(0) - 0x41;
+    final second = code.codeUnitAt(1) - 0x41;
+    if (first < 0 || first > 25 || second < 0 || second > 25) return '🏳️';
+    return String.fromCharCodes([0x1F1E6 + first, 0x1F1E6 + second]);
   }
 
   Widget _buildFavoritesTab() {

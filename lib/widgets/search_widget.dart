@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../providers/radio_provider.dart';
 import '../theme/app_theme.dart';
 
 class SearchWidget extends StatefulWidget {
@@ -73,38 +75,75 @@ class _SearchWidgetState extends State<SearchWidget> {
               onSubmitted: widget.onSearch,
             ),
           ),
-          
+
           const SizedBox(height: 16),
-          
-          // Botones de búsqueda rápida por género
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildGenreChip('Rock', FontAwesomeIcons.guitar),
-                const SizedBox(width: 8),
-                _buildGenreChip('Pop', FontAwesomeIcons.music),
-                const SizedBox(width: 8),
-                _buildGenreChip('Jazz', FontAwesomeIcons.music),
-                const SizedBox(width: 8),
-                _buildGenreChip('Classical', FontAwesomeIcons.music),
-                const SizedBox(width: 8),
-                _buildGenreChip('Electronic', FontAwesomeIcons.headphones),
-                const SizedBox(width: 8),
-                _buildGenreChip('News', FontAwesomeIcons.newspaper),
-                const SizedBox(width: 8),
-                _buildGenreChip('Sports', FontAwesomeIcons.futbol),
-                const SizedBox(width: 8),
-                _buildGenreChip('Talk', FontAwesomeIcons.microphone),
-              ],
-            ),
+
+          // Botones de búsqueda rápida por género (cargados de la API)
+          Consumer<RadioProvider>(
+            builder: (context, radioProvider, child) {
+              final genres = radioProvider.genres;
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (var i = 0; i < genres.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 8),
+                      _buildGenreChip(genres[i]),
+                    ],
+                  ],
+                ),
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _buildGenreChip(String genre, IconData icon) {
+  // Icono representativo según el nombre del género
+  IconData _iconForGenre(String genre) {
+    final g = genre.toLowerCase();
+    if (g.contains('rock')) return FontAwesomeIcons.guitar;
+    if (g.contains('news') || g.contains('noticia')) {
+      return FontAwesomeIcons.newspaper;
+    }
+    if (g.contains('sport') || g.contains('deporte') || g.contains('football')) {
+      return FontAwesomeIcons.futbol;
+    }
+    if (g.contains('talk') || g.contains('podcast')) {
+      return FontAwesomeIcons.microphone;
+    }
+    if (g.contains('dance') ||
+        g.contains('electronic') ||
+        g.contains('techno') ||
+        g.contains('house')) {
+      return FontAwesomeIcons.headphones;
+    }
+    if (g.contains('country') ||
+        g.contains('folk') ||
+        g.contains('latin') ||
+        g.contains('world')) {
+      return FontAwesomeIcons.globe;
+    }
+    if (g.contains('religi') || g.contains('gospel') || g.contains('christian')) {
+      return FontAwesomeIcons.church;
+    }
+    if (g.contains('oldies') ||
+        g.contains('retro') ||
+        g.contains('80s') ||
+        g.contains('90s') ||
+        g.contains('70s') ||
+        g.contains('60s')) {
+      return FontAwesomeIcons.clockRotateLeft;
+    }
+    return FontAwesomeIcons.music;
+  }
+
+  Widget _buildGenreChip(String genre) {
+    final label = genre.length > 1
+        ? '${genre[0].toUpperCase()}${genre.substring(1)}'
+        : genre.toUpperCase();
+
     return InkWell(
       onTap: () {
         widget.controller.text = genre;
@@ -132,13 +171,13 @@ class _SearchWidgetState extends State<SearchWidget> {
           mainAxisSize: MainAxisSize.min,
           children: [
             FaIcon(
-              icon,
+              _iconForGenre(genre),
               color: Colors.white70,
               size: 14,
             ),
             const SizedBox(width: 6),
             Text(
-              genre,
+              label,
               style: const TextStyle(
                 color: Colors.white70,
                 fontSize: 12,
