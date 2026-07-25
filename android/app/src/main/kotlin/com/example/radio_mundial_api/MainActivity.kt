@@ -1,5 +1,7 @@
 package com.example.radio_mundial_api
 
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 
-class MainActivity : FlutterActivity()
+// AudioServiceActivity (del plugin audio_service) expone el FlutterEngine
+// correcto para el audio en segundo plano y la notificación multimedia.
+class MainActivity : AudioServiceActivity()
