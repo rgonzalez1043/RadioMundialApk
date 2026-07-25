@@ -1,22 +1,28 @@
-# Radio Mundial 📻
+# WorldRadio FM 📻
 
 Una aplicación de radio online moderna desarrollada en Flutter que permite escuchar estaciones de radio de todo el mundo en tiempo real.
 
 ## Características ✨
 
 - 🎵 **Reproductor de audio en tiempo real** - Escucha estaciones de radio en vivo
+- 🔔 **Audio en segundo plano** - Notificación multimedia con controles en pantalla de bloqueo
+- 📞 **Manejo de interrupciones** - Pausa automática con llamadas, alarmas y al desconectar auriculares
+- 🔄 **Recuperación automática** - Si un stream falla, prueba con las siguientes estaciones y reconecta si se corta
+- 😴 **Temporizador de apagado** - Duerme escuchando: apagado automático a los 5, 15, 30, 45 o 60 minutos
+- 🚀 **Splash screen nativo** - Logo de WorldRadio FM al iniciar la app
 - 🔍 **Búsqueda avanzada** - Encuentra estaciones por nombre, país o género
-- 🌍 **Estaciones internacionales** - Acceso a miles de estaciones de radio mundiales
-- ❤️ **Favoritos** - Guarda tus estaciones preferidas
-- 🎨 **Interfaz moderna** - Diseño oscuro y elegante
-- 📱 **Multiplataforma** - Compatible con Android, iOS, Web y Desktop
+- 🌍 **Países dinámicos** - Lista completa de países cargada de la API, con banderas, conteo de emisoras y filtro
+- 🎸 **Géneros dinámicos** - Los géneros más populares de la API como filtros rápidos
+- ❤️ **Favoritos** - Guarda tus estaciones preferidas (persisten entre sesiones)
+- 🎨 **Interfaz moderna y responsiva** - Diseño oscuro elegante, adaptable a cualquier pantalla
+- 📱 **Multiplataforma** - Compatible con Android, iOS y Web
 
 ## Funcionalidades 🚀
 
 ### Pestañas principales:
 1. **Popular** - Estaciones más escuchadas del mundo
-2. **Buscar** - Búsqueda por texto y filtros por género
-3. **Países** - Explora estaciones por país
+2. **Buscar** - Búsqueda por texto y filtros rápidos por género
+3. **Países** - Explora todos los países disponibles con buscador incluido
 4. **Favoritos** - Tus estaciones guardadas
 
 ### Controles del reproductor:
@@ -24,6 +30,7 @@ Una aplicación de radio online moderna desarrollada en Flutter que permite escu
 - ⏹️ Stop
 - 🔊 Control de volumen
 - ❤️ Agregar/quitar de favoritos
+- ⏲️ Temporizador de apagado (desde el AppBar)
 
 ## Instalación 🛠️
 
@@ -37,8 +44,8 @@ Una aplicación de radio online moderna desarrollada en Flutter que permite escu
 
 1. **Clonar el repositorio**
    ```bash
-   git clone <repository-url>
-   cd radio_mundial_api
+   git clone https://github.com/rgonzalez1043/RadioMundialApk.git
+   cd RadioMundialApk
    ```
 
 2. **Instalar dependencias**
@@ -51,33 +58,43 @@ Una aplicación de radio online moderna desarrollada en Flutter que permite escu
    flutter run
    ```
 
+### Generar APK
+
+```bash
+flutter build apk --release
+```
+
 ## Dependencias principales 📦
 
-- `just_audio: ^0.9.36` - Reproductor de audio para streams
-- `http: ^1.1.0` - Cliente HTTP para APIs
+- `just_audio: ^0.10.6` - Reproductor de audio para streams en vivo
+- `just_audio_background: ^0.0.1-beta.17` - Audio en segundo plano y notificación multimedia
+- `audio_session: ^0.2.4` - Manejo del foco de audio e interrupciones
 - `provider: ^6.1.1` - Gestión de estado
+- `http: ^1.1.0` - Cliente HTTP para APIs
 - `cached_network_image: ^3.3.0` - Cache de imágenes
 - `font_awesome_flutter: ^10.6.0` - Iconos
-- `lottie: ^2.7.0` - Animaciones
+- `shared_preferences: ^2.2.2` - Persistencia de favoritos
+- `flutter_native_splash` (dev) - Generación del splash screen nativo
 
 ## Arquitectura 🏗️
 
 ```
 lib/
 ├── models/           # Modelos de datos
-│   └── radio_station.dart
+│   ├── radio_station.dart
+│   └── country.dart
 ├── services/         # Servicios y APIs
-│   ├── audio_service.dart
-│   └── radio_api_service.dart
+│   ├── audio_service.dart      # Reproductor (just_audio + sesión de audio)
+│   └── radio_api_service.dart  # Cliente de Radio Browser API
 ├── providers/        # Gestión de estado
-│   └── radio_provider.dart
+│   └── radio_provider.dart     # Estado, temporizador y recuperación de streams
 ├── screens/          # Pantallas de la app
 │   └── home_screen.dart
 ├── widgets/          # Widgets reutilizables
 │   ├── player_widget.dart
 │   ├── station_list_widget.dart
 │   └── search_widget.dart
-└── main.dart         # Punto de entrada
+└── main.dart         # Punto de entrada (inicializa audio en 2.º plano)
 ```
 
 ## API utilizada 🌐
@@ -88,32 +105,37 @@ La aplicación utiliza la **Radio Browser API** (https://www.radio-browser.info/
 - Metadatos de las estaciones
 - URLs de streaming en tiempo real
 
+La app colabora con la comunidad registrando el clic de cada reproducción para las estadísticas de la API.
+
 ## Uso 📱
 
 1. **Explorar estaciones populares**: Abre la app y ve las estaciones más populares
-2. **Buscar estaciones**: Usa la pestaña "Buscar" para encontrar estaciones específicas
+2. **Buscar estaciones**: Usa la pestaña "Buscar" o toca un género para filtrar
 3. **Reproducir**: Toca cualquier estación para comenzar a escuchar
-4. **Controlar reproducción**: Usa los controles del reproductor en la parte superior
+4. **Controlar reproducción**: Desde el reproductor en la app o la notificación multimedia
 5. **Agregar favoritos**: Toca el corazón para guardar estaciones
-6. **Explorar por país**: Ve a la pestaña "Países" para explorar por ubicación
+6. **Explorar por país**: Ve a la pestaña "Países" y filtra por nombre
+7. **Programar apagado**: Toca el cronómetro del AppBar y elige los minutos
 
 ## Características técnicas 🔧
 
 - **Arquitectura**: Provider pattern para gestión de estado
+- **Audio en segundo plano**: Servicio foreground con notificación multimedia (MediaSession)
+- **Sesión de audio**: Pausa por foco perdido, interrupciones y auriculares desconectados
+- **Recuperación de errores**: Reintento con estaciones alternativas y reconexión automática
 - **Audio streaming**: Soporte para MP3, AAC y otros formatos
 - **Cache**: Imágenes cacheadas para mejor rendimiento
-- **Responsive**: Interfaz adaptable a diferentes tamaños de pantalla
-- **Error handling**: Manejo robusto de errores de red y audio
+- **Responsive**: Interfaz adaptable a diferentes tamaños de pantalla y escalado de fuente
+- **Fallback offline**: Estaciones, países y géneros de respaldo si no hay conexión
 
 ## Próximas mejoras 🚧
 
-- [ ] Modo sleep timer
 - [ ] Ecualizador
 - [ ] Grabación de streams
 - [ ] Compartir estaciones
 - [ ] Tema claro/oscuro
-- [ ] Notificaciones de reproducción
 - [ ] Historial de reproducción
+- [ ] Metadatos ICY (canción actual) en streams que los soporten
 
 ## Contribuir 🤝
 
