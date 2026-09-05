@@ -28,7 +28,6 @@ Una aplicación de radio online moderna desarrollada en Flutter que permite escu
 ### Controles del reproductor:
 - ▶️ Play/Pause
 - ⏹️ Stop
-- 🔊 Control de volumen
 - ❤️ Agregar/quitar de favoritos
 - ⏲️ Temporizador de apagado (desde el AppBar)
 

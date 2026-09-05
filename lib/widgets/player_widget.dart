@@ -16,21 +16,22 @@ class PlayerWidget extends StatelessWidget {
         if (station == null) return const SizedBox.shrink();
 
         return Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             gradient: AppTheme.cardGradient,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
             boxShadow: AppTheme.modernShadow,
           ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               // Información de la estación
               Row(
                 children: [
                   // Imagen de la estación
                   Container(
-                    width: 60,
-                    height: 60,
+                    width: 54,
+                    height: 54,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
                       color: const Color(0xFF16213e),
@@ -146,11 +147,11 @@ class PlayerWidget extends StatelessWidget {
                           padding: EdgeInsets.zero,
                           icon: FaIcon(
                             radioProvider.isFavorite(station)
-                              ? FontAwesomeIcons.solidHeart
-                              : FontAwesomeIcons.heart,
+                                ? FontAwesomeIcons.solidHeart
+                                : FontAwesomeIcons.heart,
                             color: radioProvider.isFavorite(station)
-                              ? AppTheme.favoriteColor
-                              : Colors.white54,
+                                ? AppTheme.favoriteColor
+                                : Colors.white54,
                             size: 18,
                           ),
                         ),
@@ -175,8 +176,8 @@ class PlayerWidget extends StatelessWidget {
                           padding: EdgeInsets.zero,
                           icon: FaIcon(
                             radioProvider.isPlaying
-                              ? FontAwesomeIcons.pause
-                              : FontAwesomeIcons.play,
+                                ? FontAwesomeIcons.pause
+                                : FontAwesomeIcons.play,
                             color: Colors.white,
                             size: 16,
                           ),
@@ -205,110 +206,78 @@ class PlayerWidget extends StatelessWidget {
                 ],
               ),
               
-              const SizedBox(height: 16),
-              
-              // Control de volumen
-              Row(
-                children: [
-                  const FaIcon(
-                    FontAwesomeIcons.volumeLow,
-                    color: Colors.white54,
-                    size: 14,
-                  ),
-                  Expanded(
-                    child: Slider(
-                      value: radioProvider.volume,
-                      onChanged: radioProvider.setVolume,
-                      activeColor: Colors.white,
-                      inactiveColor: Colors.white24,
-                      thumbColor: Colors.white,
-                    ),
-                  ),
-                  const FaIcon(
-                    FontAwesomeIcons.volumeHigh,
-                    color: Colors.white54,
-                    size: 14,
-                  ),
-                ],
-              ),
-              
-              // Indicador de estado
-              if (radioProvider.isLoading)
-                const Padding(
-                  padding: EdgeInsets.only(top: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white54,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Conectando...',
-                        style: TextStyle(
-                          color: Colors.white54,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              
-              if (radioProvider.isPlaying && !radioProvider.isLoading)
+              // Fila de estado (Conectando / En vivo / Temporizador)
+              if (radioProvider.isLoading ||
+                  (radioProvider.isPlaying && !radioProvider.isLoading) ||
+                  radioProvider.sleepRemaining != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          color: Colors.green,
-                          shape: BoxShape.circle,
+                      if (radioProvider.isLoading) ...[
+                        const SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white54,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      const Text(
-                        'En vivo',
-                        style: TextStyle(
-                          color: Colors.green,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
+                        const SizedBox(width: 6),
+                        const Text(
+                          'Conectando...',
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 11,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-
-              // Cuenta regresiva del temporizador de apagado
-              if (radioProvider.sleepRemaining != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const FaIcon(
-                        FontAwesomeIcons.stopwatch,
-                        color: AppTheme.secondaryColor,
-                        size: 10,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        radioProvider.sleepRemaining!.inMinutes >= 1
-                            ? 'Apagado en ${radioProvider.sleepRemaining!.inMinutes} min'
-                            : 'Apagado en menos de 1 min',
-                        style: const TextStyle(
+                      ] else if (radioProvider.isPlaying) ...[
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            color: Colors.green,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        const Text(
+                          'En vivo',
+                          style: TextStyle(
+                            color: Colors.green,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                      if ((radioProvider.isLoading || radioProvider.isPlaying) &&
+                          radioProvider.sleepRemaining != null)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          child: Text(
+                            '•',
+                            style: TextStyle(color: Colors.white38, fontSize: 11),
+                          ),
+                        ),
+                      if (radioProvider.sleepRemaining != null) ...[
+                        const FaIcon(
+                          FontAwesomeIcons.stopwatch,
                           color: AppTheme.secondaryColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
+                          size: 10,
                         ),
-                      ),
+                        const SizedBox(width: 5),
+                        Text(
+                          radioProvider.sleepRemaining!.inMinutes >= 1
+                              ? 'Apagado en ${radioProvider.sleepRemaining!.inMinutes} min'
+                              : 'Apagado en < 1 min',
+                          style: const TextStyle(
+                            color: AppTheme.secondaryColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

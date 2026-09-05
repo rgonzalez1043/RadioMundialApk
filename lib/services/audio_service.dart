@@ -143,17 +143,6 @@ class AudioService {
     }
   }
 
-  // Cambiar el volumen
-  Future<void> setVolume(double volume) async {
-    try {
-      // Asegurar que el volumen esté entre 0.0 y 1.0
-      volume = volume.clamp(0.0, 1.0);
-      await _audioPlayer?.setVolume(volume);
-    } catch (e) {
-      debugPrint('Error al cambiar volumen: $e');
-    }
-  }
-
   // Dispose
   void dispose() {
     _audioPlayer?.dispose();

@@ -17,7 +17,6 @@ class RadioProvider with ChangeNotifier {
   bool _isLoading = false;
   bool _isPlaying = false;
   String _errorMessage = '';
-  double _volume = 0.7;
 
   // Países y géneros cargados dinámicamente desde la API
   List<Country> _countries = [];
@@ -43,7 +42,6 @@ class RadioProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isPlaying => _isPlaying;
   String get errorMessage => _errorMessage;
-  double get volume => _volume;
   AudioService get audioService => _audioService;
   List<Country> get countries => _countries;
   List<String> get genres => _genres;
@@ -275,17 +273,6 @@ class RadioProvider with ChangeNotifier {
       notifyListeners();
     } catch (e) {
       _setError('Error al detener: $e');
-    }
-  }
-
-  // Establecer volumen
-  Future<void> setVolume(double volume) async {
-    try {
-      _volume = volume;
-      await _audioService.setVolume(volume);
-      notifyListeners();
-    } catch (e) {
-      _setError('Error al cambiar volumen: $e');
     }
   }
 
