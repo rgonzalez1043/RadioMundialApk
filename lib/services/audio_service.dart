@@ -27,32 +27,40 @@ class AudioService {
 
   // Inicializar el servicio de audio
   Future<void> initialize() async {
+    if (_initialized) return;
     try {
       // handleInterruptions (activo por defecto) pausa al desconectar
       // los auriculares y ante interrupciones de audio de otras apps.
-      _audioPlayer = AudioPlayer();
+      final player = AudioPlayer();
+      _audioPlayer = player;
 
       // Sesión de audio tipo música: maneja el foco de audio y las
       // interrupciones (llamadas, alarmas, otras apps de sonido).
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
 
-      // Escuchar cambios en el estado del reproductor
-      _audioPlayer!.playerStateStream.listen((state) {
-        _isPlaying = state.playing;
+      player.playerStateStream.listen((state) {
+        final processing = state.processingState;
+        // Una radio en vivo no termina nunca: si llega a "completed"
+        // mientras suena, la señal se cortó.
+        if (state.playing &&
+            processing == ProcessingState.completed &&
+            _currentStation != null) {
+          _errorController.add('La transmisión se interrumpió');
+        }
+        // Tras un error el reproductor queda en "idle" aunque playing siga
+        // en true: en ese caso no está sonando nada.
+        _isPlaying = state.playing &&
+            processing != ProcessingState.idle &&
+            processing != ProcessingState.completed;
         _playerStateController.add(_isPlaying);
       });
 
-      // Errores mientras se reproduce (stream caído a mitad de sesión)
-      _audioPlayer!.playbackEventStream.listen(
-        (_) {},
-        onError: (Object e, StackTrace st) {
-          debugPrint('Error durante la reproducción: $e');
-          _isPlaying = false;
-          _playerStateController.add(false);
-          _errorController.add(e.toString());
-        },
-      );
+      // Desde just_audio 0.10 los errores de reproducción llegan por errorStream.
+      player.errorStream.listen((e) {
+        debugPrint('Error durante la reproducción: ${e.message}');
+        _errorController.add(e.message ?? 'Error de reproducción');
+      });
 
       _initialized = true;
     } catch (e) {
@@ -60,52 +68,54 @@ class AudioService {
     }
   }
 
-  // Reproducir una estación de radio
-  Future<bool> playStation(RadioStation station) async {
-    if (!_initialized || _audioPlayer == null) return false;
+  /// Reproduce una estación. Devuelve false si no se pudo conectar.
+  /// Con [force] vuelve a conectar aunque ya esté sonando (útil en vivo).
+  Future<bool> playStation(RadioStation station, {bool force = false}) async {
+    final player = _audioPlayer;
+    if (!_initialized || player == null) return false;
+
+    if (!force && _currentStation?.id == station.id && _isPlaying) {
+      return true;
+    }
+
+    final streamUri = Uri.tryParse(station.streamUrl);
+    if (streamUri == null || !streamUri.hasScheme || streamUri.host.isEmpty) {
+      debugPrint('URL de stream inválida: ${station.streamUrl}');
+      return false;
+    }
+    final artUri = Uri.tryParse(station.imageUrl ?? '');
 
     try {
-      // Si ya está reproduciendo la misma estación, no hacer nada
-      if (_currentStation?.id == station.id && _isPlaying) {
-        return true;
-      }
-
-      debugPrint('Intentando reproducir: ${station.name} - ${station.streamUrl}');
-
       // El tag MediaItem alimenta la notificación multimedia y la
       // pantalla de bloqueo (título, país/género y carátula).
-      final source = AudioSource.uri(
-        Uri.parse(station.streamUrl),
-        tag: MediaItem(
-          id: station.uuid,
-          title: station.name,
-          artist: [
-            if (station.country.isNotEmpty) station.country,
-            if (station.genre.isNotEmpty) station.genre,
-          ].join(' • '),
-          artUri: station.imageUrl != null && station.imageUrl!.isNotEmpty
-              ? Uri.parse(station.imageUrl!)
-              : null,
+      await player.setAudioSource(
+        AudioSource.uri(
+          streamUri,
+          tag: MediaItem(
+            id: station.uuid.isNotEmpty ? station.uuid : station.streamUrl,
+            title: station.name,
+            artist: [
+              if (station.country.isNotEmpty) station.country,
+              if (station.genre.isNotEmpty) station.genre,
+            ].join(' • '),
+            artUri: artUri != null && artUri.hasScheme && artUri.host.isNotEmpty
+                ? artUri
+                : null,
+          ),
         ),
       );
 
-      await _audioPlayer!.setAudioSource(source);
-
       // NO esperar play(): en un stream en vivo su Future no termina
       // hasta que se detiene la reproducción.
-      unawaited(_audioPlayer!.play());
+      unawaited(player.play().catchError((Object e) {
+        debugPrint('Error en play(): $e');
+      }));
 
       _currentStation = station;
-      _isPlaying = true;
-
       return true;
     } catch (e) {
+      // También llega aquí si otra estación interrumpió esta carga.
       debugPrint('Error al reproducir la estación ${station.name}: $e');
-
-      // Intentar limpiar el estado en caso de error
-      _currentStation = null;
-      _isPlaying = false;
-
       return false;
     }
   }
@@ -114,39 +124,26 @@ class AudioService {
   Future<void> pause() async {
     try {
       await _audioPlayer?.pause();
-      _isPlaying = false;
     } catch (e) {
       debugPrint('Error al pausar: $e');
     }
   }
 
-  // Reanudar la reproducción
-  Future<void> resume() async {
-    try {
-      if (_currentStation != null && _audioPlayer != null) {
-        unawaited(_audioPlayer!.play());
-        _isPlaying = true;
-      }
-    } catch (e) {
-      debugPrint('Error al reanudar: $e');
-    }
+  /// Reanuda volviendo a conectar: en una radio en vivo se vuelve al
+  /// directo en lugar de reproducir audio viejo del búfer.
+  Future<bool> resume() async {
+    final station = _currentStation;
+    if (station == null) return false;
+    return playStation(station, force: true);
   }
 
   // Detener la reproducción
   Future<void> stop() async {
+    _currentStation = null;
     try {
       await _audioPlayer?.stop();
-      _isPlaying = false;
-      _currentStation = null;
     } catch (e) {
       debugPrint('Error al detener: $e');
     }
-  }
-
-  // Dispose
-  void dispose() {
-    _audioPlayer?.dispose();
-    _playerStateController.close();
-    _errorController.close();
   }
 }

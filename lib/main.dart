@@ -15,6 +15,7 @@ Future<void> main() async {
       androidNotificationChannelId: 'worldradio_fm_audio',
       androidNotificationChannelName: 'Reproducción de radio',
       androidNotificationOngoing: true,
+      androidNotificationIcon: 'drawable/ic_stat_radio',
     );
   } catch (e) {
     debugPrint('No se pudo inicializar el audio en segundo plano: $e');

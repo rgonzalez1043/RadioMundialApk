@@ -1,51 +1,79 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import '../models/country.dart';
 import '../models/radio_station.dart';
 import '../services/audio_service.dart';
 import '../services/radio_api_service.dart';
 
-class RadioProvider with ChangeNotifier {
-  final AudioService _audioService = AudioService();
+/// Estado de una lista de emisoras (populares, búsqueda o país).
+class StationListState {
+  List<RadioStation> stations = const [];
+  bool loading = false;
+  String error = '';
+  int _request = 0;
+}
 
-  // Estado de la aplicación
-  List<RadioStation> _stations = [];
+class RadioProvider with ChangeNotifier {
+  static const String _connectionError =
+      'No se pudo conectar con el directorio de radios. Revisa tu conexión a internet.';
+  static const int _maxPlayAttempts = 3;
+
+  final AudioService _audioService = AudioService();
+  final List<StreamSubscription<dynamic>> _subscriptions = [];
+  final StreamController<String> _messages = StreamController<String>.broadcast();
+  bool _disposed = false;
+
+  // Listas de cada pestaña (cada una con su propio estado de carga/error)
+  final StationListState popular = StationListState();
+  final StationListState search = StationListState();
+  final StationListState byCountry = StationListState();
+  Future<List<RadioStation>> Function()? _searchFetch;
+  Country? _selectedCountry;
+
   List<RadioStation> _favoriteStations = [];
+
+  // Reproducción
   RadioStation? _currentStation;
-  bool _isLoading = false;
+  List<RadioStation> _queue = const [];
   bool _isPlaying = false;
-  String _errorMessage = '';
+  bool _isBuffering = false;
+  bool _wantsPlayback = false;
+  bool _isReconnecting = false;
+  int _playToken = 0;
 
   // Países y géneros cargados dinámicamente desde la API
   List<Country> _countries = [];
-  List<String> _genres = const [
-    'Pop', 'Rock', 'News', 'Jazz', 'Classical', 'Dance', 'Sports', 'Talk',
-  ];
   bool _countriesLoading = false;
-
-  // Recuperación ante streams caídos
-  static const int _maxPlayAttempts = 3;
-  int _playAttempts = 0;
-  bool _isReconnecting = false;
+  List<String> _genres = const [
+    'pop', 'rock', 'news', 'jazz', 'classical', 'dance', 'sports', 'talk',
+  ];
 
   // Temporizador de apagado
   Timer? _sleepTimer;
   Timer? _sleepTicker;
   DateTime? _sleepEndTime;
 
+  RadioProvider() {
+    _initializeProvider();
+  }
+
   // Getters
-  List<RadioStation> get stations => _stations;
   List<RadioStation> get favoriteStations => _favoriteStations;
   RadioStation? get currentStation => _currentStation;
-  bool get isLoading => _isLoading;
   bool get isPlaying => _isPlaying;
-  String get errorMessage => _errorMessage;
-  AudioService get audioService => _audioService;
+
+  /// Conectando con la emisora (distinto de cargar listas).
+  bool get isBuffering => _isBuffering;
   List<Country> get countries => _countries;
-  List<String> get genres => _genres;
   bool get countriesLoading => _countriesLoading;
+  List<String> get genres => _genres;
+  Country? get selectedCountry => _selectedCountry;
+  bool get hasSearched => _searchFetch != null;
+
+  /// Mensajes puntuales para mostrar al usuario (SnackBar).
+  Stream<String> get messages => _messages.stream;
 
   /// Tiempo restante del temporizador de apagado (null si no hay ninguno).
   Duration? get sleepRemaining {
@@ -55,307 +83,341 @@ class RadioProvider with ChangeNotifier {
     return remaining.isNegative ? Duration.zero : remaining;
   }
 
-  // Constructor
-  RadioProvider() {
-    _initializeProvider();
-  }
-
-  // Inicializar el provider
   Future<void> _initializeProvider() async {
-    await _audioService.initialize();
-
-    // Escuchar cambios en el estado del reproductor
-    _audioService.onPlayerStateChanged.listen((isPlaying) {
-      _isPlaying = isPlaying;
-      notifyListeners();
-    });
-
-    // Reconectar si el stream se cae a mitad de la reproducción
-    _audioService.onPlaybackError.listen((_) => _handleStreamDrop());
-
-    // Cargar favoritos y estaciones al inicio
-    await _loadFavorites();
-    await loadPopularStations();
-
-    // Países y géneros se cargan en segundo plano
+    // Las listas no dependen del reproductor: se cargan en paralelo.
+    unawaited(_loadFavorites());
+    unawaited(loadPopularStations());
     unawaited(loadCountries());
     unawaited(loadGenres());
+
+    await _audioService.initialize();
+    if (_disposed) return;
+
+    _subscriptions.add(_audioService.onPlayerStateChanged.listen((isPlaying) {
+      _isPlaying = isPlaying;
+      _notify();
+    }));
+    // Reconectar si el stream se cae a mitad de la reproducción
+    _subscriptions.add(
+      _audioService.onPlaybackError.listen((_) => _handleStreamDrop()),
+    );
   }
 
-  // Cargar favoritos desde SharedPreferences
-  Future<void> _loadFavorites() async {
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  void _message(String text) {
+    if (!_disposed) _messages.add(text);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Listas de emisoras
+  // ---------------------------------------------------------------------------
+
+  Future<void> _loadList(
+    StationListState list,
+    Future<List<RadioStation>> Function() fetch,
+  ) async {
+    final request = ++list._request;
+    list.loading = true;
+    list.error = '';
+    _notify();
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final favoritesJson = prefs.getStringList('favorite_stations') ?? [];
-
-      _favoriteStations = favoritesJson
-          .map((jsonString) => RadioStation.fromJson(json.decode(jsonString)))
-          .toList();
-
-      notifyListeners();
+      final stations = await fetch();
+      if (request != list._request) return; // llegó una petición más nueva
+      list.stations = stations;
     } catch (e) {
-      debugPrint('Error cargando favoritos: $e');
+      if (request != list._request) return;
+      debugPrint('Error cargando emisoras: $e');
+      list.error = _connectionError;
+      if (list.stations.isNotEmpty) _message(_connectionError);
+    } finally {
+      if (request == list._request) {
+        list.loading = false;
+        _notify();
+      }
     }
   }
 
-  // Guardar favoritos en SharedPreferences
-  Future<void> _saveFavorites() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final favoritesJson = _favoriteStations
-          .map((station) => json.encode(station.toJson()))
-          .toList();
+  void _resetList(StationListState list) {
+    list._request++;
+    list.stations = const [];
+    list.loading = false;
+    list.error = '';
+  }
 
-      await prefs.setStringList('favorite_stations', favoritesJson);
-    } catch (e) {
-      debugPrint('Error guardando favoritos: $e');
+  Future<void> loadPopularStations() =>
+      _loadList(popular, RadioApiService.getPopularStations);
+
+  /// Busca por nombre. Una búsqueda vacía limpia los resultados.
+  Future<void> searchStations(String query) {
+    final text = query.trim();
+    if (text.isEmpty) {
+      _searchFetch = null;
+      _resetList(search);
+      _notify();
+      return Future.value();
     }
+    return _startSearch(() => RadioApiService.searchStations(text));
   }
 
-  // Cargar estaciones populares
-  Future<void> loadPopularStations() async {
-    await _performApiCall(() async {
-      _stations = await RadioApiService.getPopularStations();
-    });
+  /// Busca por género (etiqueta de Radio Browser).
+  Future<void> searchByGenre(String genre) =>
+      _startSearch(() => RadioApiService.getStationsByGenre(genre));
+
+  Future<void> retrySearch() {
+    final fetch = _searchFetch;
+    return fetch == null ? Future.value() : _loadList(search, fetch);
   }
 
-  // Buscar estaciones
-  Future<void> searchStations(String query) async {
-    if (query.trim().isEmpty) {
-      await loadPopularStations();
-      return;
-    }
-
-    await _performApiCall(() async {
-      _stations = await RadioApiService.searchStations(query);
-    });
+  Future<void> _startSearch(Future<List<RadioStation>> Function() fetch) {
+    _searchFetch = fetch;
+    search.stations = const [];
+    return _loadList(search, fetch);
   }
 
-  // Obtener estaciones por país
-  Future<void> getStationsByCountry(String country) async {
-    await _performApiCall(() async {
-      _stations = await RadioApiService.getStationsByCountry(country);
-    });
+  /// Abre la lista de emisoras de un país dentro de la pestaña Países.
+  Future<void> selectCountry(Country country) {
+    _selectedCountry = country;
+    byCountry.stations = const [];
+    return _loadList(
+      byCountry,
+      () => RadioApiService.getStationsByCountryCode(country.iso31661),
+    );
   }
 
-  // Obtener estaciones por código de país (ISO 3166-1 alfa-2)
-  Future<void> getStationsByCountryCode(String countryCode) async {
-    await _performApiCall(() async {
-      _stations = await RadioApiService.getStationsByCountryCode(countryCode);
-    });
+  void clearSelectedCountry() {
+    _selectedCountry = null;
+    _resetList(byCountry);
+    _notify();
   }
 
-  // Obtener estaciones por género
-  Future<void> getStationsByGenre(String genre) async {
-    await _performApiCall(() async {
-      _stations = await RadioApiService.getStationsByGenre(genre);
-    });
-  }
-
-  // Cargar la lista de países desde la API
   Future<void> loadCountries() async {
     if (_countriesLoading) return;
     _countriesLoading = true;
-    notifyListeners();
+    _notify();
     try {
       _countries = await RadioApiService.getCountries();
     } catch (e) {
       debugPrint('Error cargando países: $e');
     } finally {
       _countriesLoading = false;
-      notifyListeners();
+      _notify();
     }
   }
 
-  // Cargar los géneros más populares desde la API
   Future<void> loadGenres() async {
     try {
       final genres = await RadioApiService.getGenres();
       if (genres.isNotEmpty) {
         _genres = genres;
-        notifyListeners();
+        _notify();
       }
     } catch (e) {
       debugPrint('Error cargando géneros: $e');
     }
   }
 
-  // Reproducir una estación con recuperación ante streams caídos:
-  // si falla, prueba automáticamente con las siguientes de la lista.
-  Future<void> playStation(RadioStation station) async {
-    _playAttempts = 0;
-    await _playWithRecovery(station);
+  // ---------------------------------------------------------------------------
+  // Reproducción
+  // ---------------------------------------------------------------------------
+
+  /// Reproduce una estación. Si no responde, prueba con las siguientes de
+  /// [queue] (la lista desde la que se eligió) y avisa al usuario.
+  Future<void> playStation(RadioStation station, {List<RadioStation>? queue}) {
+    if (queue != null) _queue = List.unmodifiable(queue);
+    _wantsPlayback = true;
+    return _play(station, attempt: 1, token: ++_playToken, original: station);
   }
 
-  Future<void> _playWithRecovery(RadioStation station) async {
-    _setLoading(true);
-    _clearError();
+  Future<void> _play(
+    RadioStation station, {
+    required int attempt,
+    required int token,
+    required RadioStation original,
+  }) async {
+    _currentStation = station;
+    _isBuffering = true;
+    _notify();
 
-    try {
-      final success = await _audioService.playStation(station);
-      if (success) {
-        _currentStation = station;
-        _isPlaying = true;
-        _playAttempts = 0;
-        // Registrar el clic en radio-browser (ayuda a las estadísticas de la API)
-        unawaited(RadioApiService.registerStationClick(station.uuid));
-      } else {
-        await _tryNextStation(station);
+    final ok = await _audioService.playStation(station);
+    // Si el usuario eligió otra estación mientras conectaba, no tocar nada.
+    if (token != _playToken) return;
+
+    if (ok) {
+      _isBuffering = false;
+      _notify();
+      unawaited(RadioApiService.registerStationClick(station.uuid));
+      if (station != original) {
+        _message('«${original.name}» no responde. Reproduciendo «${station.name}».');
       }
-    } catch (e) {
-      debugPrint('Error al reproducir: $e');
-      await _tryNextStation(station);
-    } finally {
-      _setLoading(false);
+      return;
     }
-  }
 
-  Future<void> _tryNextStation(RadioStation failedStation) async {
-    _playAttempts++;
-    final next = _nextStationAfter(failedStation);
-
-    if (_playAttempts < _maxPlayAttempts && next != null) {
-      debugPrint('Stream caído, probando con: ${next.name}');
-      await _playWithRecovery(next);
+    final next = attempt < _maxPlayAttempts ? _nextStationAfter(station) : null;
+    if (next != null && next != original) {
+      await _play(next, attempt: attempt + 1, token: token, original: original);
     } else {
-      _currentStation = null;
-      _isPlaying = false;
-      _playAttempts = 0;
-      _setError('No se pudo reproducir. Prueba con otra estación.');
+      _clearPlayback();
+      _message('No se pudo reproducir «${original.name}». Prueba con otra emisora.');
     }
   }
 
   RadioStation? _nextStationAfter(RadioStation station) {
-    if (_stations.length < 2) return null;
-    final index = _stations.indexWhere((s) => s.id == station.id);
+    if (_queue.length < 2) return null;
+    final index = _queue.indexWhere((s) => s.id == station.id);
     if (index == -1) return null;
-    return _stations[(index + 1) % _stations.length];
+    return _queue[(index + 1) % _queue.length];
   }
 
   // Reconexión cuando el stream se interrumpe a mitad de la reproducción
   Future<void> _handleStreamDrop() async {
     final station = _currentStation;
-    if (station == null || _isReconnecting) return;
+    if (station == null || !_wantsPlayback || _isBuffering || _isReconnecting) {
+      return;
+    }
 
     _isReconnecting = true;
+    final token = ++_playToken;
+    _isBuffering = true;
+    _notify();
     debugPrint('Stream interrumpido, reconectando...');
+
     await Future.delayed(const Duration(seconds: 3));
-
-    final success = await _audioService.playStation(station);
-    if (!success) {
-      _currentStation = null;
-      _isPlaying = false;
-      _setError('Se perdió la conexión con la estación.');
-    }
-    notifyListeners();
+    final ok = token == _playToken &&
+        !_disposed &&
+        await _audioService.playStation(station, force: true);
     _isReconnecting = false;
+    if (token != _playToken) return;
+
+    if (ok) {
+      _isBuffering = false;
+      _notify();
+    } else {
+      _clearPlayback();
+      _message('Se perdió la conexión con «${station.name}».');
+    }
   }
 
-  // Toggle play/pause
   Future<void> togglePlayPause() async {
-    try {
-      if (_isPlaying) {
-        await _audioService.pause();
-      } else {
-        await _audioService.resume();
-      }
-    } catch (e) {
-      _setError('Error al pausar/reanudar: $e');
+    final station = _currentStation;
+    if (station == null) return;
+
+    if (_isPlaying) {
+      _wantsPlayback = false;
+      await _audioService.pause();
+      return;
+    }
+
+    _wantsPlayback = true;
+    final token = ++_playToken;
+    _isBuffering = true;
+    _notify();
+    final ok = await _audioService.resume();
+    if (token != _playToken) return;
+    if (ok) {
+      _isBuffering = false;
+      _notify();
+    } else {
+      _clearPlayback();
+      _message('No se pudo reconectar con «${station.name}».');
     }
   }
 
-  // Detener reproducción
   Future<void> stopPlayback() async {
-    try {
-      await _audioService.stop();
-      _currentStation = null;
-      _isPlaying = false;
-      notifyListeners();
-    } catch (e) {
-      _setError('Error al detener: $e');
-    }
+    _playToken++;
+    _clearPlayback();
+    await _audioService.stop();
   }
 
-  // Activar el temporizador de apagado
+  void _clearPlayback() {
+    _wantsPlayback = false;
+    _currentStation = null;
+    _isPlaying = false;
+    _isBuffering = false;
+    _notify();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Temporizador de apagado
+  // ---------------------------------------------------------------------------
+
   void setSleepTimer(Duration duration) {
     cancelSleepTimer();
     _sleepEndTime = DateTime.now().add(duration);
     _sleepTimer = Timer(duration, _onSleepTimerFired);
     // Actualizar la cuenta regresiva visible cada 30 segundos
-    _sleepTicker = Timer.periodic(const Duration(seconds: 30), (_) {
-      notifyListeners();
-    });
-    notifyListeners();
+    _sleepTicker = Timer.periodic(const Duration(seconds: 30), (_) => _notify());
+    _notify();
   }
 
-  // Cancelar el temporizador de apagado
   void cancelSleepTimer() {
     _sleepTimer?.cancel();
     _sleepTicker?.cancel();
     _sleepTimer = null;
     _sleepTicker = null;
     _sleepEndTime = null;
-    notifyListeners();
+    _notify();
   }
 
   Future<void> _onSleepTimerFired() async {
-    _sleepTicker?.cancel();
-    _sleepTicker = null;
-    _sleepTimer = null;
-    _sleepEndTime = null;
+    cancelSleepTimer();
     await stopPlayback();
   }
 
-  // Toggle favorito
+  // ---------------------------------------------------------------------------
+  // Favoritos
+  // ---------------------------------------------------------------------------
+
+  Future<void> _loadFavorites() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final favoritesJson = prefs.getStringList('favorite_stations') ?? [];
+      _favoriteStations = favoritesJson
+          .map((s) => RadioStation.fromJson(json.decode(s) as Map<String, dynamic>))
+          .toList();
+      _notify();
+    } catch (e) {
+      debugPrint('Error cargando favoritos: $e');
+    }
+  }
+
+  Future<void> _saveFavorites() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        'favorite_stations',
+        _favoriteStations.map((s) => json.encode(s.toJson())).toList(),
+      );
+    } catch (e) {
+      debugPrint('Error guardando favoritos: $e');
+    }
+  }
+
   Future<void> toggleFavorite(RadioStation station) async {
     if (isFavorite(station)) {
       _favoriteStations.removeWhere((s) => s.id == station.id);
     } else {
       _favoriteStations.add(station);
     }
+    _notify();
     await _saveFavorites();
-    notifyListeners();
   }
 
-  // Verificar si es favorito
   bool isFavorite(RadioStation station) {
     return _favoriteStations.any((s) => s.id == station.id);
   }
 
-  // Método auxiliar para llamadas API
-  Future<void> _performApiCall(Future<void> Function() apiCall) async {
-    try {
-      _setLoading(true);
-      _clearError();
-      await apiCall();
-    } catch (e) {
-      _setError('Error de conexión: $e');
-    } finally {
-      _setLoading(false);
-    }
-  }
-
-  // Métodos auxiliares
-  void _setLoading(bool loading) {
-    _isLoading = loading;
-    notifyListeners();
-  }
-
-  void _clearError() {
-    _errorMessage = '';
-    notifyListeners();
-  }
-
-  void _setError(String error) {
-    _errorMessage = error;
-    notifyListeners();
-  }
-
   @override
   void dispose() {
+    _disposed = true;
     _sleepTimer?.cancel();
     _sleepTicker?.cancel();
-    _audioService.dispose();
+    for (final subscription in _subscriptions) {
+      subscription.cancel();
+    }
+    _messages.close();
     super.dispose();
   }
 }

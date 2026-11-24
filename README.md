@@ -7,15 +7,15 @@ Una aplicación de radio online moderna desarrollada en Flutter que permite escu
 - 🎵 **Reproductor de audio en tiempo real** - Escucha estaciones de radio en vivo
 - 🔔 **Audio en segundo plano** - Notificación multimedia con controles en pantalla de bloqueo
 - 📞 **Manejo de interrupciones** - Pausa automática con llamadas, alarmas y al desconectar auriculares
-- 🔄 **Recuperación automática** - Si un stream falla, prueba con las siguientes estaciones y reconecta si se corta
+- 🔄 **Recuperación automática** - Si un stream no responde, avisa y prueba con la siguiente emisora; si la señal se corta, reconecta
 - 😴 **Temporizador de apagado** - Duerme escuchando: apagado automático a los 5, 15, 30, 45 o 60 minutos
 - 🚀 **Splash screen nativo** - Logo de WorldRadio FM al iniciar la app
 - 🔍 **Búsqueda avanzada** - Encuentra estaciones por nombre, país o género
-- 🌍 **Países dinámicos** - Lista completa de países cargada de la API, con banderas, conteo de emisoras y filtro
+- 🌍 **Países dinámicos** - Más de 200 países con banderas, conteo de emisoras, filtro y lista de emisoras de cada país
 - 🎸 **Géneros dinámicos** - Los géneros más populares de la API como filtros rápidos
 - ❤️ **Favoritos** - Guarda tus estaciones preferidas (persisten entre sesiones)
 - 🎨 **Interfaz moderna y responsiva** - Diseño oscuro elegante, adaptable a cualquier pantalla
-- 📱 **Multiplataforma** - Compatible con Android, iOS y Web
+- 📱 **Android** - Publicada en Google Play (`com.rgonzalez.worldradiofm`)
 
 ## Funcionalidades 🚀
 
@@ -57,11 +57,21 @@ Una aplicación de radio online moderna desarrollada en Flutter que permite escu
    flutter run
    ```
 
-### Generar APK
+### Compilar para Google Play
+
+La versión de release se firma con la llave de subida (*upload key*). Ni la llave ni sus contraseñas se suben a git:
+
+- `android/key.properties` (ignorado por git) apunta al archivo `.jks` y guarda sus contraseñas.
+- Sin `key.properties` la compilación usa la llave de depuración: sirve para probar, pero Play la rechaza.
 
 ```bash
-flutter build apk --release
+# 1. Sube el número de versión en pubspec.yaml (p. ej. 1.0.1+2) antes de cada subida
+# 2. Genera el App Bundle firmado
+flutter build appbundle --release
+# Resultado: build/app/outputs/bundle/release/app-release.aab
 ```
+
+Los textos, gráficos y capturas de la ficha de Play Store están en [store/](store/), y la política de privacidad en [docs/](docs/) (publicada con GitHub Pages).
 
 ## Dependencias principales 📦
 
@@ -125,7 +135,8 @@ La app colabora con la comunidad registrando el clic de cada reproducción para 
 - **Audio streaming**: Soporte para MP3, AAC y otros formatos
 - **Cache**: Imágenes cacheadas para mejor rendimiento
 - **Responsive**: Interfaz adaptable a diferentes tamaños de pantalla y escalado de fuente
-- **Fallback offline**: Estaciones, países y géneros de respaldo si no hay conexión
+- **Sin conexión**: mensajes claros con botón "Reintentar" (sin emisoras inventadas)
+- **API robusta**: varios servidores espejo de Radio Browser, límite de tiempo por petición y emisoras caídas ocultas
 
 ## Próximas mejoras 🚧
 
@@ -146,7 +157,7 @@ La app colabora con la comunidad registrando el clic de cada reproducción para 
 
 ## Licencia 📄
 
-Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) para detalles.
+Proyecto personal. Las transmisiones pertenecen a cada emisora; el directorio proviene de [Radio Browser](https://www.radio-browser.info/).
 
 ## Soporte 💬
 

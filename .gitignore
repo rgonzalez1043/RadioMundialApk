@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Video de la declaración del servicio en primer plano (se sube a YouTube, no a git)
+store/*.mp4
+store/release/

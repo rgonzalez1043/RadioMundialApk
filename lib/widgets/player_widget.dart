@@ -42,6 +42,7 @@ class PlayerWidget extends StatelessWidget {
                           ? CachedNetworkImage(
                               imageUrl: station.imageUrl!,
                               fit: BoxFit.cover,
+                              memCacheWidth: 160,
                               placeholder: (context, url) => const Center(
                                 child: FaIcon(
                                   FontAwesomeIcons.radio,
@@ -143,7 +144,10 @@ class PlayerWidget extends StatelessWidget {
                         ),
                         child: IconButton(
                           onPressed: () => radioProvider.toggleFavorite(station),
-                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                          tooltip: radioProvider.isFavorite(station)
+                              ? 'Quitar de favoritos'
+                              : 'Agregar a favoritos',
+                          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                           padding: EdgeInsets.zero,
                           icon: FaIcon(
                             radioProvider.isFavorite(station)
@@ -172,7 +176,8 @@ class PlayerWidget extends StatelessWidget {
                         ),
                         child: IconButton(
                           onPressed: radioProvider.togglePlayPause,
-                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                          tooltip: radioProvider.isPlaying ? 'Pausar' : 'Reproducir',
+                          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                           padding: EdgeInsets.zero,
                           icon: FaIcon(
                             radioProvider.isPlaying
@@ -192,7 +197,8 @@ class PlayerWidget extends StatelessWidget {
                         ),
                         child: IconButton(
                           onPressed: radioProvider.stopPlayback,
-                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                          tooltip: 'Detener',
+                          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                           padding: EdgeInsets.zero,
                           icon: const FaIcon(
                             FontAwesomeIcons.stop,
@@ -207,15 +213,15 @@ class PlayerWidget extends StatelessWidget {
               ),
               
               // Fila de estado (Conectando / En vivo / Temporizador)
-              if (radioProvider.isLoading ||
-                  (radioProvider.isPlaying && !radioProvider.isLoading) ||
+              if (radioProvider.isBuffering ||
+                  radioProvider.isPlaying ||
                   radioProvider.sleepRemaining != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      if (radioProvider.isLoading) ...[
+                      if (radioProvider.isBuffering) ...[
                         const SizedBox(
                           width: 12,
                           height: 12,
@@ -251,7 +257,7 @@ class PlayerWidget extends StatelessWidget {
                           ),
                         ),
                       ],
-                      if ((radioProvider.isLoading || radioProvider.isPlaying) &&
+                      if ((radioProvider.isBuffering || radioProvider.isPlaying) &&
                           radioProvider.sleepRemaining != null)
                         const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 8),

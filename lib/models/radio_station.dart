@@ -31,16 +31,27 @@ class RadioStation {
   String get genre => tags;
 
   factory RadioStation.fromJson(Map<String, dynamic> json) {
+    String str(String key) => json[key]?.toString().trim() ?? '';
+    int number(String key) {
+      final value = json[key];
+      if (value is num) return value.toInt();
+      return int.tryParse(value?.toString() ?? '') ?? 0;
+    }
+
+    final resolved = str('url_resolved');
+    final favicon = str('favicon');
+    final homepage = str('homepage');
+    final uuid = str('stationuuid');
     return RadioStation(
-      uuid: json['stationuuid'] ?? json['changeuuid'] ?? '',
-      name: json['name'] ?? '',
-      url: json['url_resolved'] ?? json['url'] ?? '',
-      favicon: json['favicon']?.isNotEmpty == true ? json['favicon'] : null,
-      homepage: json['homepage'],
-      country: json['country'] ?? '',
-      tags: json['tags'] ?? '',
-      votes: json['votes'] ?? 0,
-      bitrate: json['bitrate'] ?? 0,
+      uuid: uuid.isNotEmpty ? uuid : str('changeuuid'),
+      name: str('name'),
+      url: resolved.isNotEmpty ? resolved : str('url'),
+      favicon: favicon.startsWith('http') ? favicon : null,
+      homepage: homepage.isNotEmpty ? homepage : null,
+      country: str('country'),
+      tags: str('tags'),
+      votes: number('votes'),
+      bitrate: number('bitrate'),
     );
   }
 

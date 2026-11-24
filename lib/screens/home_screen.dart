@@ -1,7 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../models/country.dart';
 import '../providers/radio_provider.dart';
+import '../widgets/empty_state.dart';
 import '../widgets/station_list_widget.dart';
 import '../widgets/player_widget.dart';
 import '../widgets/search_widget.dart';
@@ -10,6 +14,10 @@ import '../theme/app_theme.dart';
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
+  static final Uri privacyPolicyUrl = Uri.parse(
+    'https://rgonzalez1043.github.io/RadioMundialApk/privacy-policy.html',
+  );
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -17,111 +25,147 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _countryFilterController = TextEditingController();
+  StreamSubscription<String>? _messagesSub;
   String _countryFilter = '';
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-    // Las estaciones se cargan desde el constructor del RadioProvider,
-    // no es necesario cargarlas de nuevo aquí.
+    // Avisos puntuales del provider (emisora caída, sin conexión, etc.)
+    _messagesSub = context.read<RadioProvider>().messages.listen(_showMessage);
   }
 
   @override
   void dispose() {
+    _messagesSub?.cancel();
     _tabController.dispose();
     _searchController.dispose();
+    _countryFilterController.dispose();
     super.dispose();
+  }
+
+  void _showMessage(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(text), behavior: SnackBarBehavior.floating),
+      );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
-      appBar: AppBar(
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
+    final hasCountry =
+        context.select<RadioProvider, bool>((p) => p.selectedCountry != null);
+
+    // "Atrás" dentro de un país vuelve a la lista de países.
+    return PopScope(
+      canPop: !hasCountry,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) context.read<RadioProvider>().clearSelectedCountry();
+      },
+      child: Scaffold(
+        backgroundColor: AppTheme.backgroundColor,
+        // El teclado tapa la lista en vez de comprimir la pantalla
+        // (evita desbordes en teléfonos pequeños).
+        resizeToAvoidBottomInset: false,
+        appBar: AppBar(
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.asset(
+                  'assets/logo.png',
+                  width: 36,
+                  height: 36,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Flexible(
+                child: Text(
+                  'WorldRadio FM',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 22,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          flexibleSpace: Container(
+            decoration: const BoxDecoration(
+              gradient: AppTheme.primaryGradient,
+            ),
+          ),
+          elevation: 0,
+          centerTitle: true,
+          leading: IconButton(
+            onPressed: _showAbout,
+            tooltip: 'Acerca de',
+            icon: const FaIcon(
+              FontAwesomeIcons.circleInfo,
+              size: 20,
+              color: Colors.white70,
+            ),
+          ),
+          actions: [
+            Consumer<RadioProvider>(
+              builder: (context, radioProvider, child) {
+                final timerActive = radioProvider.sleepRemaining != null;
+                return IconButton(
+                  onPressed: _showSleepTimerSheet,
+                  tooltip: 'Temporizador de apagado',
+                  icon: FaIcon(
+                    FontAwesomeIcons.stopwatch,
+                    size: 20,
+                    color: timerActive ? AppTheme.secondaryColor : Colors.white70,
+                  ),
+                );
+              },
+            ),
+          ],
+          bottom: TabBar(
+            controller: _tabController,
+            indicatorColor: AppTheme.secondaryColor,
+            indicatorWeight: 3,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white54,
+            tabs: const [
+              Tab(
+                icon: FaIcon(FontAwesomeIcons.fire, size: 18),
+                text: 'Popular',
+              ),
+              Tab(
+                icon: FaIcon(FontAwesomeIcons.magnifyingGlass, size: 18),
+                text: 'Buscar',
+              ),
+              Tab(
+                icon: FaIcon(FontAwesomeIcons.globe, size: 18),
+                text: 'Países',
+              ),
+              Tab(
+                icon: FaIcon(FontAwesomeIcons.heart, size: 18),
+                text: 'Favoritos',
+              ),
+            ],
+          ),
+        ),
+        body: Column(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.asset(
-                'assets/logo.png',
-                width: 36,
-                height: 36,
-                fit: BoxFit.cover,
-              ),
-            ),
-            const SizedBox(width: 10),
-            const Flexible(
-              child: Text(
-                'WorldRadio FM',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 22,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: AppTheme.primaryGradient,
-          ),
-        ),
-        elevation: 0,
-        centerTitle: true,
-        actions: [
-          Consumer<RadioProvider>(
-            builder: (context, radioProvider, child) {
-              final timerActive = radioProvider.sleepRemaining != null;
-              return IconButton(
-                onPressed: _showSleepTimerSheet,
-                tooltip: 'Temporizador de apagado',
-                icon: FaIcon(
-                  FontAwesomeIcons.stopwatch,
-                  size: 20,
-                  color: timerActive ? AppTheme.secondaryColor : Colors.white70,
-                ),
-              );
-            },
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: AppTheme.secondaryColor,
-          indicatorWeight: 3,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white54,
-          tabs: const [
-            Tab(
-              icon: FaIcon(FontAwesomeIcons.fire, size: 18),
-              text: 'Popular',
-            ),
-            Tab(
-              icon: FaIcon(FontAwesomeIcons.magnifyingGlass, size: 18),
-              text: 'Buscar',
-            ),
-            Tab(
-              icon: FaIcon(FontAwesomeIcons.globe, size: 18),
-              text: 'Países',
-            ),
-            Tab(
-              icon: FaIcon(FontAwesomeIcons.heart, size: 18),
-              text: 'Favoritos',
-            ),
-          ],
-        ),
-      ),
-      body: Column(
-        children: [
-          // Reproductor fijo en la parte superior
-          Consumer<RadioProvider>(
-            builder: (context, radioProvider, child) {
-              if (radioProvider.currentStation != null) {
+            // Reproductor fijo en la parte superior
+            Consumer<RadioProvider>(
+              builder: (context, radioProvider, child) {
+                if (radioProvider.currentStation == null) {
+                  return const SizedBox.shrink();
+                }
                 return Container(
                   decoration: const BoxDecoration(
                     gradient: AppTheme.primaryGradient,
@@ -135,32 +179,50 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                   child: const PlayerWidget(),
                 );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-
-          // Contenido de las pestañas
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                // Pestaña Popular
-                _buildPopularTab(),
-
-                // Pestaña Buscar
-                _buildSearchTab(),
-
-                // Pestaña Países
-                _buildCountriesTab(),
-
-                // Pestaña Favoritos
-                _buildFavoritesTab(),
-              ],
+              },
             ),
-          ),
-        ],
+
+            // Contenido de las pestañas
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildPopularTab(),
+                  _buildSearchTab(),
+                  _buildCountriesTab(),
+                  _buildFavoritesTab(),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  void _showAbout() {
+    showAboutDialog(
+      context: context,
+      applicationName: 'WorldRadio FM',
+      applicationIcon: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.asset('assets/logo.png', width: 48, height: 48),
+      ),
+      children: [
+        const Text(
+          'Directorio de emisoras: Radio Browser (radio-browser.info). '
+          'Cada transmisión pertenece a su respectiva emisora.',
+        ),
+        const SizedBox(height: 12),
+        TextButton.icon(
+          onPressed: () => launchUrl(
+            HomeScreen.privacyPolicyUrl,
+            mode: LaunchMode.externalApplication,
+          ),
+          icon: const FaIcon(FontAwesomeIcons.shieldHalved, size: 16),
+          label: const Text('Política de privacidad'),
+        ),
+      ],
     );
   }
 
@@ -172,72 +234,65 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppTheme.surfaceColor,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (sheetContext) {
         final remaining = radioProvider.sleepRemaining;
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'Apagado automático',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    'Apagado automático',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
-              if (remaining != null)
-                ListTile(
-                  leading: const FaIcon(
-                    FontAwesomeIcons.ban,
-                    color: AppTheme.accentColor,
-                    size: 18,
+                if (remaining != null)
+                  ListTile(
+                    leading: const FaIcon(
+                      FontAwesomeIcons.ban,
+                      color: AppTheme.accentColor,
+                      size: 18,
+                    ),
+                    title: Text(
+                      'Cancelar temporizador (quedan ${_formatRemaining(remaining)})',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    onTap: () {
+                      radioProvider.cancelSleepTimer();
+                      Navigator.pop(sheetContext);
+                      _showMessage('Temporizador cancelado');
+                    },
                   ),
-                  title: Text(
-                    'Cancelar temporizador (quedan ${_formatRemaining(remaining)})',
-                    style: const TextStyle(color: Colors.white),
+                for (final minutes in options)
+                  ListTile(
+                    leading: const FaIcon(
+                      FontAwesomeIcons.clock,
+                      color: Colors.white54,
+                      size: 18,
+                    ),
+                    title: Text(
+                      '$minutes minutos',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    onTap: () {
+                      radioProvider.setSleepTimer(Duration(minutes: minutes));
+                      Navigator.pop(sheetContext);
+                      _showMessage('La radio se apagará en $minutes minutos');
+                    },
                   ),
-                  onTap: () {
-                    radioProvider.cancelSleepTimer();
-                    Navigator.pop(sheetContext);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Temporizador cancelado'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
-                ),
-              for (final minutes in options)
-                ListTile(
-                  leading: const FaIcon(
-                    FontAwesomeIcons.clock,
-                    color: Colors.white54,
-                    size: 18,
-                  ),
-                  title: Text(
-                    '$minutes minutos',
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  onTap: () {
-                    radioProvider.setSleepTimer(Duration(minutes: minutes));
-                    Navigator.pop(sheetContext);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('La radio se apagará en $minutes minutos'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
-                ),
-              const SizedBox(height: 8),
-            ],
+                const SizedBox(height: 8),
+              ],
+            ),
           ),
         );
       },
@@ -249,113 +304,47 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return '${remaining.inSeconds} s';
   }
 
+  /// Lista con sus estados de carga, error y vacío.
+  Widget _buildStationList(
+    StationListState list, {
+    required Future<void> Function() onRetry,
+    String emptyTitle = 'No se encontraron emisoras',
+  }) {
+    if (list.loading && list.stations.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppTheme.primaryColor),
+      );
+    }
+
+    final Widget content;
+    if (list.error.isNotEmpty && list.stations.isEmpty) {
+      content = EmptyState(
+        icon: FontAwesomeIcons.wifi,
+        iconColor: Colors.orange,
+        title: 'Sin conexión',
+        message: list.error,
+        actionLabel: 'Reintentar',
+        onAction: onRetry,
+      );
+    } else if (list.stations.isEmpty) {
+      content = EmptyState(icon: FontAwesomeIcons.radio, title: emptyTitle);
+    } else {
+      content = StationListWidget(stations: list.stations);
+    }
+
+    return RefreshIndicator(
+      onRefresh: onRetry,
+      color: AppTheme.secondaryColor,
+      child: content,
+    );
+  }
+
   Widget _buildPopularTab() {
     return Consumer<RadioProvider>(
-      builder: (context, radioProvider, child) {
-        if (radioProvider.isLoading && radioProvider.stations.isEmpty) {
-          return const Center(
-            child: CircularProgressIndicator(
-              color: AppTheme.primaryColor,
-            ),
-          );
-        }
-
-        if (radioProvider.errorMessage.isNotEmpty && radioProvider.stations.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const FaIcon(
-                  FontAwesomeIcons.triangleExclamation,
-                  color: Colors.orange,
-                  size: 48,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  radioProvider.errorMessage,
-                  style: const TextStyle(color: Colors.white70),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Mostrando estaciones de respaldo',
-                  style: TextStyle(color: Colors.white54, fontSize: 14),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => radioProvider.loadPopularStations(),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryColor,
-                  ),
-                  child: const Text('Reintentar'),
-                ),
-              ],
-            ),
-          );
-        }
-
-        // Mostrar mensaje si estamos usando estaciones de respaldo
-        if (radioProvider.stations.isNotEmpty && radioProvider.errorMessage.isNotEmpty) {
-          return Column(
-            children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
-                ),
-                child: Row(
-                  children: [
-                    const FaIcon(
-                      FontAwesomeIcons.circleInfo,
-                      color: Colors.orange,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        'Conexión limitada - Mostrando estaciones de respaldo',
-                        style: TextStyle(color: Colors.orange, fontSize: 12),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Flexible(
-                      child: TextButton(
-                        onPressed: () => radioProvider.loadPopularStations(),
-                        style: TextButton.styleFrom(
-                          minimumSize: Size.zero,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: const Text(
-                          'Reintentar',
-                          style: TextStyle(color: Colors.orange, fontSize: 12),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: StationListWidget(stations: radioProvider.stations),
-              ),
-            ],
-          );
-        }
-
-        return RefreshIndicator(
-          onRefresh: () => radioProvider.loadPopularStations(),
-          color: AppTheme.secondaryColor,
-          child: StationListWidget(stations: radioProvider.stations),
-        );
-      },
+      builder: (context, radioProvider, child) => _buildStationList(
+        radioProvider.popular,
+        onRetry: radioProvider.loadPopularStations,
+      ),
     );
   }
 
@@ -364,22 +353,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       children: [
         SearchWidget(
           controller: _searchController,
-          onSearch: (query) {
-            context.read<RadioProvider>().searchStations(query);
-          },
+          onSearch: (query) => context.read<RadioProvider>().searchStations(query),
+          onGenreSelected: (genre) =>
+              context.read<RadioProvider>().searchByGenre(genre),
         ),
         Expanded(
           child: Consumer<RadioProvider>(
             builder: (context, radioProvider, child) {
-              if (radioProvider.isLoading) {
-                return const Center(
-                  child: CircularProgressIndicator(
-                    color: AppTheme.primaryColor,
-                  ),
+              if (!radioProvider.hasSearched) {
+                return const EmptyState(
+                  icon: FontAwesomeIcons.magnifyingGlass,
+                  title: 'Busca tu emisora',
+                  message: 'Escribe el nombre de una radio o elige un género.',
                 );
               }
-
-              return StationListWidget(stations: radioProvider.stations);
+              return _buildStationList(
+                radioProvider.search,
+                onRetry: radioProvider.retrySearch,
+                emptyTitle: 'Sin resultados para esa búsqueda',
+              );
             },
           ),
         ),
@@ -388,129 +380,154 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildCountriesTab() {
-    return Column(
-      children: [
-        // Filtro de países
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: TextField(
-            style: const TextStyle(color: Colors.white),
-            decoration: const InputDecoration(
-              hintText: 'Filtrar países...',
-              isDense: true,
-              prefixIcon: Padding(
-                padding: EdgeInsets.all(12),
-                child: FaIcon(
-                  FontAwesomeIcons.magnifyingGlass,
-                  color: Colors.white54,
-                  size: 16,
+    return Consumer<RadioProvider>(
+      builder: (context, radioProvider, child) {
+        final country = radioProvider.selectedCountry;
+        if (country != null) return _buildCountryStations(radioProvider, country);
+
+        return Column(
+          children: [
+            // Filtro de países
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: TextField(
+                controller: _countryFilterController,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  hintText: 'Filtrar países...',
+                  isDense: true,
+                  prefixIcon: Padding(
+                    padding: EdgeInsets.all(12),
+                    child: FaIcon(
+                      FontAwesomeIcons.magnifyingGlass,
+                      color: Colors.white54,
+                      size: 16,
+                    ),
+                  ),
                 ),
+                onChanged: (value) {
+                  setState(() => _countryFilter = value.trim().toLowerCase());
+                },
               ),
             ),
-            onChanged: (value) {
-              setState(() => _countryFilter = value.trim().toLowerCase());
+            Expanded(child: _buildCountryList(radioProvider)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCountryList(RadioProvider radioProvider) {
+    if (radioProvider.countriesLoading && radioProvider.countries.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppTheme.primaryColor),
+      );
+    }
+
+    if (radioProvider.countries.isEmpty) {
+      return EmptyState(
+        icon: FontAwesomeIcons.globe,
+        title: 'No se pudieron cargar los países',
+        message: 'Revisa tu conexión a internet.',
+        actionLabel: 'Reintentar',
+        onAction: radioProvider.loadCountries,
+      );
+    }
+
+    final filtered = _countryFilter.isEmpty
+        ? radioProvider.countries
+        : radioProvider.countries
+            .where((c) => c.name.toLowerCase().contains(_countryFilter))
+            .toList();
+
+    if (filtered.isEmpty) {
+      return const EmptyState(
+        icon: FontAwesomeIcons.globe,
+        title: 'Sin resultados para ese filtro',
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      itemCount: filtered.length,
+      itemBuilder: (context, index) {
+        final country = filtered[index];
+        return Card(
+          color: AppTheme.cardColor,
+          margin: const EdgeInsets.only(bottom: 8),
+          child: ListTile(
+            leading: Text(
+              _flagEmoji(country.iso31661),
+              style: const TextStyle(fontSize: 24),
+            ),
+            title: Text(
+              country.name,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              '${country.stationcount} emisoras',
+              style: const TextStyle(color: Colors.white54, fontSize: 12),
+            ),
+            trailing: const FaIcon(
+              FontAwesomeIcons.chevronRight,
+              color: Colors.white54,
+              size: 16,
+            ),
+            onTap: () {
+              FocusScope.of(context).unfocus();
+              radioProvider.selectCountry(country);
             },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCountryStations(RadioProvider radioProvider, Country country) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 8, 16, 0),
+          child: Row(
+            children: [
+              IconButton(
+                onPressed: radioProvider.clearSelectedCountry,
+                tooltip: 'Volver a países',
+                icon: const FaIcon(
+                  FontAwesomeIcons.arrowLeft,
+                  color: Colors.white70,
+                  size: 18,
+                ),
+              ),
+              Text(
+                _flagEmoji(country.iso31661),
+                style: const TextStyle(fontSize: 22),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  country.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ),
         ),
         Expanded(
-          child: Consumer<RadioProvider>(
-            builder: (context, radioProvider, child) {
-              if (radioProvider.countriesLoading && radioProvider.countries.isEmpty) {
-                return const Center(
-                  child: CircularProgressIndicator(
-                    color: AppTheme.primaryColor,
-                  ),
-                );
-              }
-
-              if (radioProvider.countries.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const FaIcon(
-                        FontAwesomeIcons.globe,
-                        color: Colors.white54,
-                        size: 48,
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'No se pudieron cargar los países',
-                        style: TextStyle(color: Colors.white70, fontSize: 16),
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () => radioProvider.loadCountries(),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primaryColor,
-                        ),
-                        child: const Text('Reintentar'),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              final filtered = _countryFilter.isEmpty
-                  ? radioProvider.countries
-                  : radioProvider.countries
-                      .where((c) => c.name.toLowerCase().contains(_countryFilter))
-                      .toList();
-
-              if (filtered.isEmpty) {
-                return const Center(
-                  child: Text(
-                    'Sin resultados para ese filtro',
-                    style: TextStyle(color: Colors.white54),
-                  ),
-                );
-              }
-
-              return ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                itemCount: filtered.length,
-                itemBuilder: (context, index) {
-                  final country = filtered[index];
-                  return Card(
-                    color: AppTheme.cardColor,
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      leading: Text(
-                        _flagEmoji(country.iso31661),
-                        style: const TextStyle(fontSize: 24),
-                      ),
-                      title: Text(
-                        country.name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        '${country.stationcount} emisoras',
-                        style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 12,
-                        ),
-                      ),
-                      trailing: const FaIcon(
-                        FontAwesomeIcons.chevronRight,
-                        color: Colors.white54,
-                        size: 16,
-                      ),
-                      onTap: () {
-                        context
-                            .read<RadioProvider>()
-                            .getStationsByCountryCode(country.iso31661);
-                        _tabController.animateTo(0);
-                      },
-                    ),
-                  );
-                },
-              );
-            },
+          child: _buildStationList(
+            radioProvider.byCountry,
+            onRetry: () => radioProvider.selectCountry(country),
           ),
         ),
       ],
@@ -531,37 +548,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Consumer<RadioProvider>(
       builder: (context, radioProvider, child) {
         if (radioProvider.favoriteStations.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                FaIcon(
-                  FontAwesomeIcons.heart,
-                  color: Colors.white54,
-                  size: 48,
-                ),
-                SizedBox(height: 16),
-                Text(
-                  'No tienes estaciones favoritas',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 16,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Toca el corazón en cualquier estación para agregarla aquí',
-                  style: TextStyle(
-                    color: Colors.white54,
-                    fontSize: 14,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
+          return const EmptyState(
+            icon: FontAwesomeIcons.heart,
+            title: 'No tienes estaciones favoritas',
+            message: 'Toca el corazón en cualquier estación para agregarla aquí.',
           );
         }
-
         return StationListWidget(stations: radioProvider.favoriteStations);
       },
     );

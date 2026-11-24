@@ -1,4 +1,4 @@
-package com.example.radio_mundial_api
+package com.rgonzalez.worldradiofm
 
 import com.ryanheise.audioservice.AudioServiceActivity
 

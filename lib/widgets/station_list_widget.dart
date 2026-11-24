@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../models/radio_station.dart';
 import '../providers/radio_provider.dart';
 import '../theme/app_theme.dart';
+import 'empty_state.dart';
 
 class StationListWidget extends StatelessWidget {
   final List<RadioStation> stations;
@@ -17,25 +18,9 @@ class StationListWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (stations.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            FaIcon(
-              FontAwesomeIcons.radio,
-              color: Colors.white54,
-              size: 48,
-            ),
-            SizedBox(height: 16),
-            Text(
-              'No se encontraron estaciones',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 16,
-              ),
-            ),
-          ],
-        ),
+      return const EmptyState(
+        icon: FontAwesomeIcons.radio,
+        title: 'No se encontraron emisoras',
       );
     }
 
@@ -44,7 +29,7 @@ class StationListWidget extends StatelessWidget {
       itemCount: stations.length,
       itemBuilder: (context, index) {
         final station = stations[index];
-        return StationTile(station: station);
+        return StationTile(station: station, queue: stations);
       },
     );
   }
@@ -53,9 +38,13 @@ class StationListWidget extends StatelessWidget {
 class StationTile extends StatelessWidget {
   final RadioStation station;
 
+  /// Lista desde la que se eligió (para probar la siguiente si falla).
+  final List<RadioStation> queue;
+
   const StationTile({
     super.key,
     required this.station,
+    this.queue = const [],
   });
 
   @override
@@ -98,6 +87,7 @@ class StationTile extends StatelessWidget {
                     ? CachedNetworkImage(
                         imageUrl: station.imageUrl!,
                         fit: BoxFit.cover,
+                        memCacheWidth: 150,
                         placeholder: (context, url) => const Center(
                           child: FaIcon(
                             FontAwesomeIcons.radio,
@@ -188,7 +178,7 @@ class StationTile extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (radioProvider.isLoading)
+                        if (radioProvider.isBuffering)
                           const SizedBox(
                             width: 12,
                             height: 12,
@@ -219,7 +209,7 @@ class StationTile extends StatelessWidget {
                         const SizedBox(width: 6),
                         
                         Text(
-                          radioProvider.isLoading 
+                          radioProvider.isBuffering 
                               ? 'Conectando...'
                               : isPlaying 
                                   ? 'Reproduciendo'
@@ -243,7 +233,10 @@ class StationTile extends StatelessWidget {
                 // Botón de favorito
                 IconButton(
                   onPressed: () => radioProvider.toggleFavorite(station),
-                  constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                  tooltip: radioProvider.isFavorite(station)
+                      ? 'Quitar de favoritos'
+                      : 'Agregar a favoritos',
+                  constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                   padding: EdgeInsets.zero,
                   icon: FaIcon(
                     radioProvider.isFavorite(station)
@@ -262,10 +255,13 @@ class StationTile extends StatelessWidget {
                     if (isCurrentStation && isPlaying) {
                       radioProvider.togglePlayPause();
                     } else {
-                      radioProvider.playStation(station);
+                      radioProvider.playStation(station, queue: queue);
                     }
                   },
-                  constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                  tooltip: isCurrentStation && isPlaying
+                      ? 'Pausar'
+                      : 'Reproducir ${station.name}',
+                  constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                   padding: EdgeInsets.zero,
                   icon: Container(
                     padding: const EdgeInsets.all(8),
@@ -295,7 +291,7 @@ class StationTile extends StatelessWidget {
               if (isCurrentStation) {
                 radioProvider.togglePlayPause();
               } else {
-                radioProvider.playStation(station);
+                radioProvider.playStation(station, queue: queue);
               }
             },
           ),

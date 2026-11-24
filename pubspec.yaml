@@ -1,5 +1,5 @@
 name: radio_mundial_api
-description: "Una aplicación de radio online con streams en vivo."
+description: "WorldRadio FM: radio online con miles de emisoras en vivo."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -39,6 +39,7 @@ dependencies:
   just_audio: ^0.10.6
   just_audio_background: ^0.0.1-beta.17
   audio_session: ^0.2.4
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

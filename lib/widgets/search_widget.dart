@@ -6,12 +6,14 @@ import '../theme/app_theme.dart';
 
 class SearchWidget extends StatefulWidget {
   final TextEditingController controller;
-  final Function(String) onSearch;
+  final void Function(String query) onSearch;
+  final void Function(String genre) onGenreSelected;
 
   const SearchWidget({
     super.key,
     required this.controller,
     required this.onSearch,
+    required this.onGenreSelected,
   });
 
   @override
@@ -51,6 +53,7 @@ class _SearchWidgetState extends State<SearchWidget> {
                 ),
                 suffixIcon: widget.controller.text.isNotEmpty
                     ? IconButton(
+                        tooltip: 'Borrar búsqueda',
                         onPressed: () {
                           widget.controller.clear();
                           widget.onSearch('');
@@ -69,6 +72,7 @@ class _SearchWidgetState extends State<SearchWidget> {
                   vertical: 12,
                 ),
               ),
+              textInputAction: TextInputAction.search,
               onChanged: (value) {
                 setState(() {});
               },
@@ -146,8 +150,9 @@ class _SearchWidgetState extends State<SearchWidget> {
 
     return InkWell(
       onTap: () {
-        widget.controller.text = genre;
-        widget.onSearch(genre);
+        FocusScope.of(context).unfocus();
+        setState(() => widget.controller.text = genre);
+        widget.onGenreSelected(genre);
       },
       borderRadius: BorderRadius.circular(20),
       child: Container(

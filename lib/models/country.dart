@@ -11,9 +11,9 @@ class Country {
 
   factory Country.fromJson(Map<String, dynamic> json) {
     return Country(
-      name: json['name'] ?? '',
-      iso31661: json['iso_3166_1'] ?? '',
-      stationcount: json['stationcount'] ?? 0,
+      name: json['name']?.toString() ?? '',
+      iso31661: json['iso_3166_1']?.toString() ?? '',
+      stationcount: int.tryParse('${json['stationcount']}') ?? 0,
     );
   }
 
